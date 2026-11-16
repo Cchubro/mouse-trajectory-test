@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Mouse Trajectory Test</title>
+<style>body{margin:0;font-family:monospace} #stage{position:relative;width:100vw;height:70vh;background:#f4f4f4;border-bottom:2px solid #333} button{position:absolute;padding:10px 18px;font-size:16px} #btnA{left:5%;top:15%} #btnB{left:45%;top:40%} #btnC{left:80%;top:70%} #box{position:absolute;left:20%;top:60%;width:80px;height:80px;background:#4a90d9;color:#fff;display:flex;align-items:center;justify-content:center;cursor:grab;user-select:none} #summary,#log,#fp{white-space:pre-wrap;font-size:12px;padding:8px} #summary{background:#eef} canvas{position:absolute;inset:0;pointer-events:none}</style></head>
+<body>
+<div id="stage"><canvas id="cv"></canvas>
+<button id="btnA">Button A</button><button id="btnB">Button B</button><button id="btnC">Button C</button>
+<div id="box">DRAG ME</div></div>
+<h3>Summary (updates every second)</h3><pre id="summary">waiting…</pre>
+<h3>Raw events (first 200)</h3><pre id="log"></pre>
+<h3>Fingerprint</h3><pre id="fp"></pre>
+<script>
+const log=[]; const t0=performance.now();
+const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
+function fit(){cv.width=cv.clientWidth;cv.height=cv.clientHeight;} fit(); addEventListener('resize',fit);
+let last=null;
+function rec(e){
+  log.push({t:+(performance.now()-t0).toFixed(1), type:e.type, x:e.clientX, y:e.clientY, trusted:e.isTrusted, btn:e.buttons});
+  if(log.length<=200){document.getElementById('log').textContent=log.map(r=>r.t+' '+r.type+' '+r.x+','+r.y+' trusted='+r.trusted+' btn='+r.btn).join('\n');}
+  if(e.type==='mousemove'){ if(last){ctx.beginPath();ctx.moveTo(last.x,last.y);ctx.lineTo(e.clientX,e.clientY);ctx.strokeStyle='#d00';ctx.stroke();} last={x:e.clientX,y:e.clientY}; }
+}
+addEventListener('mousemove',rec); addEventListener('mousedown',rec); addEventListener('mouseup',rec); addEventListener('click',rec);
+document.querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{ if(!b.textContent.includes('✓')) b.textContent+=' ✓'; }));
+const box=document.getElementById('box'); let drag=null;
+box.addEventListener('mousedown',e=>{drag={dx:e.clientX-box.offsetLeft,dy:e.clientY-box.offsetTop};});
+addEventListener('mousemove',e=>{if(drag){box.style.left=(e.clientX-drag.dx)+'px';box.style.top=(e.clientY-drag.dy)+'px';}});
+addEventListener('mouseup',()=>{drag=null;});
+const fp={webdriver:navigator.webdriver, plugins:navigator.plugins?navigator.plugins.length:'n/a', chrome:typeof window.chrome, languages:navigator.languages, hardwareConcurrency:navigator.hardwareConcurrency, deviceMemory:navigator.deviceMemory, screen:screen.width+'x'+screen.height, touch:'ontouchstart' in window, userAgent:navigator.userAgent};
+document.getElementById('fp').textContent=JSON.stringify(fp,null,2);
+window.__mouseLog=log;
+setInterval(()=>{
+  const moves=log.filter(r=>r.type==='mousemove');
+  let dist=0, maxJump=0; const steps=[];
+  for(let i=1;i<moves.length;i++){const d=Math.hypot(moves[i].x-moves[i-1].x, moves[i].y-moves[i-1].y); dist+=d; if(d>maxJump)maxJump=d; steps.push(+d.toFixed(1));}
+  const untrusted=log.filter(r=>!r.trusted).length;
+  const clicks=log.filter(r=>r.type==='click').length, downs=log.filter(r=>r.type==='mousedown').length;
+  document.getElementById('summary').textContent=
+   'mousemove events: '+moves.length+'\n'+
+   'mousedown: '+downs+' click: '+clicks+'\n'+
+   'untrusted events: '+untrusted+' / '+log.length+'\n'+
+   'total path length: '+dist.toFixed(1)+' px\n'+
+   'max single-step jump: '+maxJump.toFixed(1)+' px\n'+
+   'first 40 step distances: '+steps.slice(0,40).join(', ')+'\n'+
+   'time span: '+(log.length? (log[log.length-1].t - log[0].t).toFixed(1):0)+' ms\n'+
+   'total events: '+log.length;
+},1000);
+</script></body></html>
